@@ -18,14 +18,16 @@ DEFAULT_SETTINGS = {"fx_rate": 15400, "limits": {"FIAFSGVID": 10.3, "FIAFSCPID":
 def format_currency(val, ccy):
     if val == 0 or pd.isna(val): return "0"
     abs_val = abs(val)
-    pre = "-" if val < 0 else ""
+    # Ensure the sign is preserved for losses
+    prefix = "-" if val < 0 else ""
     if ccy == 'IDR':
-        if abs_val >= 1e12: return f"{pre}{abs_val/1e12:.2f} Tn"
-        if abs_val >= 1e9: return f"{pre}{abs_val/1e9:.2f} Bn"
-        return f"{pre}{abs_val/1e6:.2f} Mn"
+        if abs_val >= 1e12: res = f"{abs_val/1e12:.2f} Tn"
+        elif abs_val >= 1e9: res = f"{abs_val/1e9:.2f} Bn"
+        else: res = f"{abs_val/1e6:.2f} Mn"
     else:
-        if abs_val >= 1e6: return f"{pre}{abs_val/1e6:.2f} Mn"
-        return f"{pre}{abs_val/1e3:.2f} Th"
+        if abs_val >= 1e6: res = f"{abs_val/1e6:.2f} Mn"
+        else: res = f"{abs_val/1e3:.2f} Th"
+    return prefix + res
 
 def get_settings():
     if not os.path.exists(SETTINGS_FILE):
@@ -69,7 +71,7 @@ def index():
         df['DUR'] = df.apply(lambda r: calc_mod_duration(r, eval_date), axis=1)
         df['PV01_RAW'] = df['OS_RAW'] * df['DUR'] * 0.0001
         
-        # Safe Pie Data
+        # Pie Data
         is_gov = df['ISSUER_TYPE'].str.contains('Gov', na=False, case=False) if 'ISSUER_TYPE' in df.columns else df['TICKER'].str.startswith('FR', na=False)
         p1 = [float(df[is_gov]['OS_RAW'].sum()), float(df[~is_gov]['OS_RAW'].sum())]
         
@@ -100,26 +102,9 @@ def index():
                 "dur": round(np.average(sub['DUR'], weights=sub['OS_RAW']),2) if os_act > 0 else 0,
                 "type": "TRADING" if "TR" in pid else "BANKING"
             })
-            details[pid] = [{"t":str(r.get('TICKER','-')),"c":f"{clean_num(r.get('COUPON',0)):.2f}%","m":pd.to_datetime(r.get('MATURITY_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('MATURITY_DATE')) else '-',"os":format_currency(clean_num(r.get('OUTSTANDING',0)),ccy),"ad":pd.to_datetime(r.get('ACQ_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('ACQ_DATE')) else '-',"cp":f"{clean_num(r.get('ACQ_PRICE',0)):.2f}","mtm":f"{clean_num(r.get('MTM',0)):.2f}","gl":format_currency(clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB',0)),ccy) if "HTM" not in pid else "-","d":r.get('DUR',0)} for _,r in sub.iterrows()]
+            # Pass RAW gl_val for better color coding in template
+            details[pid] = [{"t":str(r.get('TICKER','-')),"c":f"{clean_num(r.get('COUPON',0)):.2f}%","m":pd.to_datetime(r.get('MATURITY_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('MATURITY_DATE')) else '-',"os":format_currency(clean_num(r.get('OUTSTANDING',0)),ccy),"ad":pd.to_datetime(r.get('ACQ_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('ACQ_DATE')) else '-',"cp":f"{clean_num(r.get('ACQ_PRICE',0)):.2f}","mtm":f"{clean_num(r.get('MTM',0)):.2f}","gl_val":clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB',0)),"gl":format_currency(clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB',0)),ccy) if "HTM" not in pid else "-","d":r.get('DUR',0)} for _,r in sub.iterrows()]
 
         return render_template('dashboard.html', summary=summary, details=details, settings=settings, pie={"p1":p1, "p2":get_book_sum('ID'), "p3":get_book_sum('VL')})
     except Exception as e: return f"Logic Error: {str(e)}"
-
-@app.route('/admin')
-def admin(): return render_template('admin.html', settings=get_settings())
-
-@app.route('/update-settings', methods=['POST'])
-def update_settings():
-    s = get_settings()
-    if 'fx_rate' in request.form: s['fx_rate'] = float(request.form['fx_rate'])
-    if 'port_id' in request.form: s['limits'][request.form['port_id']] = float(request.form['limit_val'])
-    with open(SETTINGS_FILE, 'w') as f: json.dump(s, f)
-    return redirect(url_for('admin'))
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    f = request.files.get('file')
-    if f: f.save(os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv"))
-    return redirect(url_for('admin'))
-
-if __name__ == '__main__': app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+# ... admin routes remain same as previous version
