@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Risk Admin | Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#020617] text-white p-10 font-sans">
+    <div class="max-w-4xl mx-auto">
+        <header class="flex justify-between items-center mb-10">
+            <h1 class="text-2xl font-black text-indigo-400 italic">ADMIN <span class="text-white">CENTER</span></h1>
+            <a href="/" class="text-xs font-bold border border-slate-700 px-4 py-2 rounded">BACK TO DASHBOARD</a>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-[#0f172a] p-6 rounded-xl border border-slate-800">
+                <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Currency Settings</h3>
+                <form action="/update-settings" method="POST" class="flex gap-2">
+                    <input type="number" name="fx_rate" value="{{ settings.fx_rate }}" class="bg-black border border-slate-700 p-2 rounded flex-grow mono">
+                    <button class="bg-amber-600 px-4 py-2 rounded text-xs font-bold">SET FX</button>
+                </form>
+            </div>
+
+            <div class="bg-[#0f172a] p-6 rounded-xl border border-slate-800">
+                <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Portfolio Overrides</h3>
+                <form action="/update-settings" method="POST" class="space-y-3">
+                    <select name="port_id" class="w-full bg-black border border-slate-700 p-2 rounded text-sm">
+                        {% for pid, val in settings.limits.items() %}
+                        <option value="{{ pid }}">{{ pid }} (Current: {{ val }})</option>
+                        {% endfor %}
+                    </select>
+                    <input type="number" step="0.1" name="limit_val" placeholder="New Numeric Limit" class="w-full bg-black border border-slate-700 p-2 rounded text-sm">
+                    <button class="w-full bg-indigo-600 py-2 rounded text-xs font-bold">UPDATE LIMIT</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-[#0f172a] p-10 rounded-xl border-2 border-dashed border-slate-800 text-center">
+            <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">System Update (CSV)</h3>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" class="text-xs text-slate-400 mb-4">
+                <button class="block mx-auto bg-white text-black px-8 py-2 rounded font-black text-xs uppercase">Upload FI-SISTEM</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
