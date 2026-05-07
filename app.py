@@ -54,66 +54,26 @@ def calc_mod_duration(row, eval_date):
 @app.route('/')
 def index():
     settings = get_settings()
-    fx = settings['fx_rate']
-    eval_date = datetime(2026, 5, 5)
-    
     file_path = os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv")
+    
     if not os.path.exists(file_path):
-        return redirect(url_for('admin')) # Force upload if no data
+        return redirect(url_for('admin'))
 
-    # Load and Process Data
+    # Load data
     df = pd.read_csv(file_path, skiprows=2)
     df.columns = [c.strip() for c in df.columns]
     
-    # Core Logic
+    # Process numeric columns
     df['OS_RAW'] = df['OUTSTANDING'].apply(clean_num)
     df['CCY'] = df['CCY'].fillna('IDR').str.strip()
-    df['DUR'] = df.apply(lambda r: calc_mod_duration(r, eval_date), axis=1)
-    df['PV01_RAW'] = df['OS_RAW'] * df['DUR'] * 0.0001
     
-    # Portfolio Aggregation
-    port_summary = []
-    all_pids = ["FITRGVID", "FITRGVVL", "FITRCPID", "FITRCPVL", "FIAFSGVID", "FIAFSGVVL", "FIAFSCPID", "FIAFSCPVL", "FIHTMGVID", "FIHTMGVVL", "FIHTMCPID", "FIHTMCPVL"]
+    # Group by Portfolio for the summary
+    summary = df.groupby('PORTFOLIO')['OS_RAW'].sum().reset_index().to_dict('records')
     
-    for pid in all_pids:
+    # Prepare bond details for the drill-down
+    details = {}
+    for pid in df['PORTFOLIO'].unique():
         sub = df[df['PORTFOLIO'] == pid]
-        os_act = sub['OS_RAW'].sum()
-        pv_act = sub['PV01_RAW'].sum()
-        
-        # Calculate limit checks
-        limit_val = settings['limits'].get(pid, -1)
-        # Add logic for PV01 limits here if you want them dynamic too
-        
-        port_summary.append({
-            "id": pid,
-            "os_act": os_act,
-            "pv_act": pv_act,
-            "count": len(sub)
-        })
+        details[pid] = sub[['TICKER', 'COUPON', 'MATURITY_DATE', 'OUTSTANDING']].to_dict('records')
 
-    return render_template('dashboard.html', summary=port_summary, settings=settings)
-
-@app.route('/admin')
-def admin():
-    return render_template('admin.html', settings=get_settings())
-
-@app.route('/update-settings', methods=['POST'])
-def update_settings():
-    settings = get_settings()
-    if 'fx_rate' in request.form:
-        settings['fx_rate'] = float(request.form['fx_rate'])
-    if 'port_id' in request.form and 'limit_val' in request.form:
-        settings['limits'][request.form['port_id']] = float(request.form['limit_val'])
-    with open(SETTINGS_FILE, 'w') as f: json.dump(settings, f)
-    return redirect(url_for('admin'))
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    file = request.files['file']
-    if file:
-        file.save(os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv"))
-    return redirect(url_for('admin'))
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    return render_template('dashboard.html', summary=summary, details=details, settings=settings)
