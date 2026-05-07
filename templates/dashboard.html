@@ -53,30 +53,7 @@
                     <td class="p-4 text-right mono {{ 'text-red-400' if '-' in p.gl_fmt else 'text-emerald-400' }}">{{ p.gl_fmt }}</td>
                     <td class="p-4 text-center font-bold text-indigo-300">{{ p.dur }}</td>
                 </tr>
-                <tr id="detail-{{ p.id }}" class="bond-detail-row">
-                    <td colspan="5" class="p-0 bg-[#020617]">
-                        <table class="w-full text-[10px] border-collapse">
-                            <thead class="bg-slate-900/80 text-slate-500 uppercase font-black">
-                                <tr><th class="p-3 pl-8 text-left">Ticker</th><th class="p-3 text-center">Coupon</th><th class="p-3 text-center">Maturity</th><th class="p-3 text-right">Outstanding</th><th class="p-3 text-center">Acq Date</th><th class="p-3 text-center">Cost</th><th class="p-3 text-center">MTM</th><th class="p-3 text-right">G/L</th><th class="p-3 text-center">Dur</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-900">
-                                {% for b in details[p.id] %}
-                                <tr class="hover:bg-slate-900/40">
-                                    <td class="p-2 pl-8 font-mono text-white italic">{{ b.t }}</td>
-                                    <td class="p-2 text-center">{{ b.c }}</td>
-                                    <td class="p-2 text-center text-slate-500">{{ b.m }}</td>
-                                    <td class="p-2 text-right mono text-slate-400 font-bold uppercase">{{ b.os }}</td>
-                                    <td class="p-2 text-center text-slate-500">{{ b.ad }}</td>
-                                    <td class="p-2 text-center mono">{{ b.cp }}</td>
-                                    <td class="p-2 text-center mono">{{ b.mtm }}</td>
-                                    <td class="p-2 text-right mono {{ 'text-red-500' if b.gl_val < 0 else 'text-emerald-500' if b.gl_val > 0 else 'text-slate-500' }}">{{ b.gl }}</td>
-                                    <td class="p-2 text-center font-bold text-indigo-400">{{ b.d }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
+                <tr id="detail-{{ p.id }}" class="bond-detail-row"><td colspan="5" class="p-0 bg-[#020617]"><table class="w-full text-[10px] border-collapse"><thead class="bg-slate-900/80 text-slate-500 uppercase font-black"><tr><th class="p-3 pl-8 text-left">Ticker</th><th class="p-3 text-center">Coupon</th><th class="p-3 text-center">Maturity</th><th class="p-3 text-right">Outstanding</th><th class="p-3 text-center">Acq Date</th><th class="p-3 text-center">Cost</th><th class="p-3 text-center">MTM</th><th class="p-3 text-right">G/L</th><th class="p-3 text-center">Dur</th></tr></thead><tbody class="divide-y divide-slate-900">{% for b in details[p.id] %}<tr class="hover:bg-slate-900/40"><td class="p-2 pl-8 font-mono text-white italic">{{ b.t }}</td><td class="p-2 text-center">{{ b.c }}</td><td class="p-2 text-center text-slate-500">{{ b.m }}</td><td class="p-2 text-right mono text-slate-400 font-bold uppercase">{{ b.os }}</td><td class="p-2 text-center text-slate-500">{{ b.ad }}</td><td class="p-2 text-center mono">{{ b.cp }}</td><td class="p-2 text-center mono">{{ b.mtm }}</td><td class="p-2 text-right mono {{ 'text-red-500' if b.gl_val < 0 else 'text-emerald-500' if b.gl_val > 0 else 'text-slate-500' }}">{{ b.gl }}</td><td class="p-2 text-center font-bold text-indigo-400">{{ b.d }}</td></tr>{% endfor %}</tbody></table></td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -98,7 +75,10 @@
                     datalabels: { 
                         color: '#fff', 
                         font: { size: 8, weight: 'bold' }, 
-                        formatter: (v, c) => { let s = c.dataset.data.reduce((a,b)=>a+b,0); return s > 0 ? (v*100/s).toFixed(1) + '%' : ''; } 
+                        formatter: (v, c) => { 
+                            let s = c.dataset.data.reduce((a,b)=>a+b,0); 
+                            return s > 0 ? (v*100/s).toFixed(1) + '%' : ''; 
+                        } 
                     } 
                 } 
             }
