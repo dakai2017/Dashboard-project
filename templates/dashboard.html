@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Risk Terminal | v7.3</title>
+    <title>Risk Terminal | v7.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
@@ -15,37 +15,14 @@
     </style>
 </head>
 <body class="p-8">
-    <header class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-400">Risk <span class="text-white">Terminal</span></h1>
-        <div class="flex gap-4">
-            <div class="card px-4 py-2 border-l-4 border-indigo-500">
-                <p class="text-[9px] text-slate-500 font-bold uppercase text-right">FX RATE</p>
-                <p class="text-xl font-bold mono">{{ settings.fx_rate }}</p>
-            </div>
-            <a href="/admin" class="bg-indigo-600 px-6 py-3 rounded-xl text-xs font-black uppercase flex items-center">⚙️ ADMIN</a>
-        </div>
-    </header>
-
-    <div class="flex gap-4 mb-8">
-        <select onchange="filterType(this.value)" class="bg-[#0f172a] border border-slate-800 text-[10px] font-bold uppercase p-2 rounded">
-            <option value="ALL">All Books</option>
-            <option value="TRADING">Trading Only</option>
-            <option value="BANKING">Banking Only</option>
-        </select>
-        <select onchange="filterCcy(this.value)" class="bg-[#0f172a] border border-slate-800 text-[10px] font-bold uppercase p-2 rounded">
-            <option value="ALL">All Currencies</option>
-            <option value="IDR">IDR Only</option>
-            <option value="USD">USD Only</option>
-        </select>
-    </div>
-
     <div class="card overflow-hidden">
         <table class="w-full text-left text-sm">
             <thead class="bg-slate-800/50 text-slate-500 uppercase text-[9px] font-black border-b border-slate-700">
                 <tr>
                     <th class="p-4">Portfolio Strategy</th>
-                    <th class="p-4">Limit Utilization (OS & PV01)</th>
+                    <th class="p-4">Risk Gauges (OS & PV01)</th>
                     <th class="p-4 text-right">Outstanding</th>
+                    <th class="p-4 text-right">Unrealized G/L</th>
                     <th class="p-4 text-center text-indigo-400">Dur</th>
                 </tr>
             </thead>
@@ -53,38 +30,55 @@
                 {% for port in summary %}
                 <tr class="portfolio-row" data-type="{{ port.type }}" data-ccy="{{ port.ccy }}" onclick="toggle('{{ port.id }}')">
                     <td class="p-4">
-                        <div class="font-black text-indigo-400 uppercase text-sm">{{ port.id }}</div>
-                        <div class="text-[8px] text-slate-600 font-bold tracking-widest">{{ port.type }} | {{ port.ccy }}</div>
+                        <div class="font-black text-indigo-400 uppercase text-sm italic tracking-tighter">{{ port.id }}</div>
+                        <div class="text-[8px] text-slate-600 font-bold uppercase">{{ port.type }}</div>
                     </td>
                     <td class="p-4 min-w-[250px] space-y-3">
                         <div>
                             <div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5">
-                                <span>OS Usage</span><span class="{{ 'text-red-500' if port.os_util > 100 else '' }}">{{ port.os_util }}%</span>
+                                <span>OS Usage</span><span>{{ port.os_util }}%</span>
                             </div>
                             <div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if port.os_util > 100 else 'bg-emerald-500' }}" style="width: {{ [port.os_util, 100]|min }}%"></div></div>
                         </div>
                         {% if port.pv_lim > 0 %}
                         <div>
                             <div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5">
-                                <span>PV01 Usage ({{ port.pv_act }}/{{ port.pv_lim }})</span><span class="{{ 'text-red-500' if port.pv_util > 100 else '' }}">{{ port.pv_util }}%</span>
+                                <span>PV01 Usage ({{ port.pv_act }}/{{ port.pv_lim }})</span><span>{{ port.pv_util }}%</span>
                             </div>
                             <div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if port.pv_util > 100 else 'bg-indigo-500' }}" style="width: {{ [port.pv_util, 100]|min }}%"></div></div>
                         </div>
                         {% endif %}
                     </td>
-                    <td class="p-4 text-right mono text-slate-200">{{ "{:,.0f}".format(port.os_act) }}</td>
+                    <td class="p-4 text-right mono font-bold text-slate-200 uppercase">{{ port.os_fmt }}</td>
+                    <td class="p-4 text-right mono {{ 'text-red-400' if '-' in port.gl_fmt else 'text-emerald-400' }}">{{ port.gl_fmt }}</td>
                     <td class="p-4 text-center font-bold text-indigo-300">{{ port.dur }}</td>
                 </tr>
                 <tr id="detail-{{ port.id }}" class="bond-detail-row">
-                    <td colspan="4" class="p-0 bg-black">
-                        <table class="w-full text-[10px]">
+                    <td colspan="5" class="p-0 bg-[#020617]">
+                        <table class="w-full text-[10px] border-collapse">
+                            <thead class="bg-slate-900/80 text-slate-500 uppercase font-black tracking-tighter">
+                                <tr>
+                                    <th class="p-3 pl-8 text-left">Ticker</th>
+                                    <th class="p-3 text-center">Coupon</th>
+                                    <th class="p-3 text-center">Maturity</th>
+                                    <th class="p-3 text-center">Acq Date</th>
+                                    <th class="p-3 text-center">Cost</th>
+                                    <th class="p-3 text-center">MTM</th>
+                                    <th class="p-3 text-right">G/L</th>
+                                    <th class="p-3 text-center">Dur</th>
+                                </tr>
+                            </thead>
                             <tbody class="divide-y divide-slate-900">
                                 {% for bond in details[port.id] %}
-                                <tr>
-                                    <td class="p-2 pl-8 font-mono text-white italic">{{ bond.TICKER }}</td>
-                                    <td class="p-2 text-center text-slate-400">{{ bond.COUPON }}</td>
-                                    <td class="p-2 text-right mono text-slate-400">{{ "{:,.0f}".format(bond.OUTSTANDING|float) }}</td>
-                                    <td class="p-2 text-center font-bold text-indigo-400">{{ bond.DUR }}</td>
+                                <tr class="hover:bg-slate-900/40">
+                                    <td class="p-2 pl-8 font-mono text-white italic">{{ bond.t }}</td>
+                                    <td class="p-2 text-center">{{ bond.c }}</td>
+                                    <td class="p-2 text-center text-slate-500">{{ bond.m }}</td>
+                                    <td class="p-2 text-center text-slate-500">{{ bond.ad }}</td>
+                                    <td class="p-2 text-center mono">{{ bond.cp }}</td>
+                                    <td class="p-2 text-center mono">{{ bond.mtm }}</td>
+                                    <td class="p-2 text-right mono {{ 'text-red-500' if '-' in bond.gl else 'text-emerald-500' }}">{{ bond.gl }}</td>
+                                    <td class="p-2 text-center font-bold text-indigo-400">{{ bond.d }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -95,22 +89,5 @@
             </tbody>
         </table>
     </div>
-
-    <script>
-        function toggle(id) {
-            const el = document.getElementById('detail-' + id);
-            el.style.display = (el.style.display === 'table-row') ? 'none' : 'table-row';
-        }
-        function filterType(val) {
-            document.querySelectorAll('.portfolio-row').forEach(row => {
-                row.style.display = (val === 'ALL' || row.dataset.type === val) ? 'table-row' : 'none';
-            });
-        }
-        function filterCcy(val) {
-            document.querySelectorAll('.portfolio-row').forEach(row => {
-                row.style.display = (val === 'ALL' || row.dataset.ccy === val) ? 'table-row' : 'none';
-            });
-        }
-    </script>
-</body>
+    </body>
 </html>
