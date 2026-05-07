@@ -1,100 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Risk Terminal | Global View</title>
+    <title>Risk Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
-        body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
-        .mono { font-family: 'JetBrains Mono', monospace; }
-        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 1rem; }
-        .progress-bg { background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden; }
-        .progress-fill { height: 100%; transition: width 0.4s; }
-        .portfolio-row { cursor: pointer; border-bottom: 1px solid #1e293b; transition: background 0.1s; }
-        .portfolio-row:hover { background-color: #1e293b; }
-        .bond-detail-row { background-color: #020617; display: none; }
-    </style>
 </head>
-<body class="p-8">
-    <nav class="flex justify-between items-center mb-10">
-        <div>
-            <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-400">Risk <span class="text-white">Terminal</span></h1>
-            <p class="text-slate-500 text-[10px] font-bold tracking-widest uppercase">Global Portfolio & Issuer Compliance</p>
-        </div>
+<body class="bg-[#020617] text-white p-10">
+    <header class="flex justify-between mb-10">
+        <h1 class="text-2xl font-black italic">RISK <span class="text-indigo-500">DASHBOARD</span></h1>
         <div class="flex gap-4">
-            <div class="card px-4 py-2 text-right border-l-4 border-indigo-500">
-                <p class="text-[9px] text-slate-500 font-bold uppercase">FX RATE</p>
-                <p class="text-lg font-bold mono italic">15,400</p>
-            </div>
-            <a href="/admin" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition shadow-lg shadow-indigo-500/20 flex items-center">
-                ⚙️ Admin Center
-            </a>
+            <span class="text-xs text-slate-500 font-bold uppercase py-2">FX: {{ settings.fx_rate }}</span>
+            <a href="/admin" class="bg-indigo-600 px-4 py-2 rounded text-xs font-bold">ADMIN CENTER</a>
         </div>
-    </nav>
+    </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
-        <div class="lg:col-span-4 card p-6 flex flex-col items-center">
-            <h3 class="text-[10px] font-black text-slate-400 uppercase mb-6 self-start tracking-widest">Sector Concentration (%)</h3>
-            <div class="w-full h-48 relative">
-                <canvas id="sectorChart"></canvas>
+    <div class="grid grid-cols-1 gap-4">
+        {% for port in summary %}
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden">
+            <div onclick="toggle('{{ port.PORTFOLIO }}')" class="p-4 flex justify-between cursor-pointer hover:bg-slate-800 transition">
+                <span class="font-bold text-indigo-400">{{ port.PORTFOLIO }}</span>
+                <span class="mono font-bold">{{ "{:,.0f}".format(port.OS_RAW) }}</span>
             </div>
-            <div id="sectorLegend" class="mt-6 w-full space-y-1 overflow-y-auto max-h-32 pr-2 text-[10px] font-bold uppercase text-slate-500"></div>
-        </div>
-
-        <div class="lg:col-span-8 card overflow-hidden border-t-4 border-indigo-500">
-            <div class="p-4 bg-slate-900/50 border-b border-slate-800 flex justify-between">
-                <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Top Issuer Monitoring</h3>
-            </div>
-            <div class="overflow-x-auto max-h-[300px]">
-                <table class="w-full text-left text-[11px] border-collapse">
-                    <thead class="bg-slate-900 sticky top-0 text-slate-500 uppercase font-black">
-                        <tr>
-                            <th class="p-3">Ticker</th>
-                            <th class="p-3">Sector</th>
-                            <th class="p-3 text-right">Limit</th>
-                            <th class="p-3 text-right">Usage</th>
-                            <th class="p-3 text-center">Util %</th>
-                        </tr>
+            
+            <div id="detail-{{ port.PORTFOLIO }}" class="hidden bg-black p-4">
+                <table class="w-full text-[10px] text-slate-400">
+                    <thead class="text-slate-600 uppercase border-b border-slate-900">
+                        <tr><th class="text-left p-2">Ticker</th><th class="p-2">Coupon</th><th class="text-right p-2">Outstanding</th></tr>
                     </thead>
-                    <tbody id="issuer-table" class="divide-y divide-slate-800">
-                        </tbody>
+                    <tbody>
+                        {% for bond in details[port.PORTFOLIO] %}
+                        <tr class="border-b border-slate-900/50">
+                            <td class="p-2 font-bold text-slate-300">{{ bond.TICKER }}</td>
+                            <td class="p-2 text-center">{{ bond.COUPON }}</td>
+                            <td class="p-2 text-right mono">{{ "{:,.0f}".format(bond.OUTSTANDING|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
-    </div>
-
-    <div class="space-y-4">
-        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-            <span class="w-2 h-2 bg-indigo-500 rounded-full"></span> Portfolio Strategy Explorer
-        </h2>
-        <div class="card overflow-hidden">
-            <table class="w-full text-left text-sm border-collapse">
-                <thead class="bg-slate-800/50 text-slate-500 uppercase text-[9px] tracking-widest font-black">
-                    <tr>
-                        <th class="p-4">Portfolio Strategy</th>
-                        <th class="p-4">Limit Gauges (OS & PV01)</th>
-                        <th class="p-4 text-right">Outstanding</th>
-                        <th class="p-4 text-right">P&L (IDR)</th>
-                        <th class="p-4 text-center">Wtd. Dur</th>
-                    </tr>
-                </thead>
-                <tbody id="portfolio-table">
-                    </tbody>
-            </table>
-        </div>
+        {% endfor %}
     </div>
 
     <script>
-        // In a deployed app, this 'details' and 'summary' would be passed from Flask
         function toggle(id) {
             const el = document.getElementById('detail-' + id);
-            el.style.display = (el.style.display === 'table-row') ? 'none' : 'table-row';
+            el.classList.toggle('hidden');
         }
-        
-        // Charts and data injection logic as developed in previous sessions
-        // ... (Referencing the clean, fast drill-down logic from v7.2)
     </script>
 </body>
 </html>
