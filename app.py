@@ -11,10 +11,12 @@ UPLOAD_FOLDER = 'data'
 SETTINGS_FILE = 'settings.json'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# PV01 Limits (IDR in Mn/Bn, USD in Th)
-PV01_LIMITS = {
-    "FITRGVID": 800.0, "FITRCPID": 700.0, "FITRGVVL": 15.0, "FITRCPVL": 15.0,
-    "FIAFSGVID": 9000.0, "FIAFSCPID": 3300.0, "FIAFSGVVL": 37.0, "FIAFSCPVL": 27.0
+# PV01 Limits (IDR in Mn, USD in Th - Converted to base units for calculation)
+PV01_LIMITS_BASE = {
+    "FITRGVID": 800.0 * 1e6,    "FITRCPID": 700.0 * 1e6,
+    "FITRGVVL": 15.0 * 1e3,     "FITRCPVL": 15.0 * 1e3,
+    "FIAFSGVID": 9000.0 * 1e6,  "FIAFSCPID": 3300.0 * 1e6,
+    "FIAFSGVVL": 37.0 * 1e3,    "FIAFSCPVL": 27.0 * 1e3
 }
 
 DEFAULT_SETTINGS = {
@@ -85,6 +87,16 @@ def index():
         df['DUR'] = df.apply(lambda r: calc_mod_duration(r, eval_date), axis=1)
         df['PV01_RAW'] = df['OS_RAW'] * df['DUR'] * 0.0001
         
+        # Pie Chart Data Construction
+        # 1. Govt vs Corp
+        govt_total = df[df['ISSUER_TYPE'].str.contains('Gov', na=False, case=False)]['OS_RAW'].sum()
+        corp_total = df[~df['ISSUER_TYPE'].str.contains('Gov', na=False, case=False)]['OS_RAW'].sum()
+        pie_data = {
+            "govt_corp": [round(govt_total), round(corp_total)],
+            "idr_books": [],
+            "vl_books": []
+        }
+        
         summary = []
         details = {}
         all_pids = ["FITRGVID", "FITRGVVL", "FITRCPID", "FITRCPVL", "FIAFSGVID", "FIAFSGVVL", "FIAFSCPID", "FIAFSCPVL", "FIHTMGVID", "FIHTMGVVL", "FIHTMCPID", "FIHTMCPVL"]
@@ -95,65 +107,37 @@ def index():
             gl_total = sub['GL_RAW'].sum() if "HTM" not in pid else 0
             ccy = 'USD' if pid.endswith('VL') else 'IDR'
             
+            # OS Logic
             limit_val = settings['limits'].get(pid, 0)
             limit_base = limit_val * (1e12 if ccy == 'IDR' else 1e6)
             os_util = round((os_act / limit_base * 100), 1) if limit_base > 0 else 0
             
-            pv_act = sub['PV01_RAW'].sum()
-            pv_limit = PV01_LIMITS.get(pid, 0)
-            pv_compare_act = pv_act if ccy == 'USD' else (pv_act / 1e6)
-            pv_util = round((pv_compare_act / pv_limit * 100), 1) if pv_limit > 0 else 0
-
-            avg_dur = 0
-            if os_act > 0:
-                avg_dur = round(np.average(sub['DUR'], weights=sub['OS_RAW']), 2)
+            # PV01 Logic (Comparing base units to base units)
+            pv_act_base = sub['PV01_RAW'].sum()
+            pv_limit_base = PV01_LIMITS_BASE.get(pid, 0)
+            pv_util = round((pv_act_base / pv_limit_base * 100), 1) if pv_limit_base > 0 else 0
 
             summary.append({
-                "id": pid, "ccy": ccy, 
-                "os_fmt": format_currency(os_act, ccy),
-                "os_util": os_util,
-                "gl_fmt": format_currency(gl_total, ccy) if "HTM" not in pid else "N/A",
-                "pv_act": round(pv_compare_act, 1), 
-                "pv_util": pv_util, "pv_lim": pv_limit,
-                "dur": avg_dur,
+                "id": pid, "ccy": ccy, "os_fmt": format_currency(os_act, ccy),
+                "os_util": os_util, "gl_fmt": format_currency(gl_total, ccy) if "HTM" not in pid else "N/A",
+                "pv_act_fmt": format_currency(pv_act_base, ccy), "pv_util": pv_util,
+                "dur": round(np.average(sub['DUR'], weights=sub['OS_RAW']), 2) if os_act > 0 else 0,
                 "type": "TRADING" if "TR" in pid else "BANKING"
             })
             
             bond_list = []
             for _, r in sub.iterrows():
                 bond_list.append({
-                    "t": str(r.get('TICKER', 'N/A')), 
-                    "c": f"{clean_num(r.get('COUPON', 0)):.2f}%", 
-                    "m": str(r.get('MATURITY_DATE', 'N/A')),
-                    "ad": str(r.get('ACQ_DATE', 'N/A')),
-                    "cp": f"{clean_num(r.get('ACQ_PRICE', 0)):.2f}",
-                    "mtm": f"{clean_num(r.get('MTM', 0)):.2f}",
+                    "t": str(r.get('TICKER', '-')), "c": f"{clean_num(r.get('COUPON', 0)):.2f}%", 
+                    "m": pd.to_datetime(r.get('MATURITY_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('MATURITY_DATE')) else '-',
+                    "os": format_currency(clean_num(r.get('OUTSTANDING', 0)), ccy),
+                    "ad": pd.to_datetime(r.get('ACQ_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('ACQ_DATE')) else '-',
+                    "cp": f"{clean_num(r.get('ACQ_PRICE', 0)):.2f}", "mtm": f"{clean_num(r.get('MTM', 0)):.2f}",
                     "gl": format_currency(clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB', 0)), ccy) if "HTM" not in pid else "-",
                     "d": r.get('DUR', 0)
                 })
             details[pid] = bond_list
 
-        return render_template('dashboard.html', summary=summary, details=details, settings=settings)
+        return render_template('dashboard.html', summary=summary, details=details, settings=settings, pie=pie_data)
     except Exception as e:
         return f"Logic Error: {str(e)}"
-
-@app.route('/admin')
-def admin(): return render_template('admin.html', settings=get_settings())
-
-@app.route('/update-settings', methods=['POST'])
-def update_settings():
-    settings = get_settings()
-    if 'fx_rate' in request.form: settings['fx_rate'] = float(request.form['fx_rate'])
-    if 'port_id' in request.form and 'limit_val' in request.form:
-        settings['limits'][request.form['port_id']] = float(request.form['limit_val'])
-    with open(SETTINGS_FILE, 'w') as f: json.dump(settings, f)
-    return redirect(url_for('admin'))
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    file = request.files.get('file')
-    if file: file.save(os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv"))
-    return redirect(url_for('admin'))
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
