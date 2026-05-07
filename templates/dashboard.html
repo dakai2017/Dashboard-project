@@ -1,50 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Risk Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Risk Terminal | v7.2 Live</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
+        body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 1rem; }
+        .progress-bg { background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; transition: width 0.4s; }
+        .portfolio-row { cursor: pointer; border-bottom: 1px solid #1e293b; transition: background 0.1s; }
+        .portfolio-row:hover { background-color: #1e293b; }
+        .bond-detail-row { background-color: #020617; display: none; }
+    </style>
 </head>
-<body class="bg-[#020617] text-white p-10">
-    <header class="flex justify-between mb-10">
-        <h1 class="text-2xl font-black italic">RISK <span class="text-indigo-500">DASHBOARD</span></h1>
+<body class="p-8">
+    <header class="flex justify-between items-center mb-10">
+        <div>
+            <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-400">Risk <span class="text-white">Terminal</span></h1>
+            <p class="text-slate-500 text-[10px] font-bold tracking-widest uppercase italic">Dual-Limit Monitoring v7.2 Live</p>
+        </div>
         <div class="flex gap-4">
-            <span class="text-xs text-slate-500 font-bold uppercase py-2">FX: {{ settings.fx_rate }}</span>
-            <a href="/admin" class="bg-indigo-600 px-4 py-2 rounded text-xs font-bold">ADMIN CENTER</a>
+            <div class="card px-4 py-2 border-l-4 border-indigo-500">
+                <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest text-right">FX RATE</p>
+                <p class="text-xl font-bold mono text-white">{{ settings.fx_rate }}</p>
+            </div>
+            <a href="/admin" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center">⚙️ ADMIN</a>
         </div>
     </header>
 
-    <div class="grid grid-cols-1 gap-4">
-        {% for port in summary %}
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden">
-            <div onclick="toggle('{{ port.PORTFOLIO }}')" class="p-4 flex justify-between cursor-pointer hover:bg-slate-800 transition">
-                <span class="font-bold text-indigo-400">{{ port.PORTFOLIO }}</span>
-                <span class="mono font-bold">{{ "{:,.0f}".format(port.OS_RAW) }}</span>
-            </div>
-            
-            <div id="detail-{{ port.PORTFOLIO }}" class="hidden bg-black p-4">
-                <table class="w-full text-[10px] text-slate-400">
-                    <thead class="text-slate-600 uppercase border-b border-slate-900">
-                        <tr><th class="text-left p-2">Ticker</th><th class="p-2">Coupon</th><th class="text-right p-2">Outstanding</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for bond in details[port.PORTFOLIO] %}
-                        <tr class="border-b border-slate-900/50">
-                            <td class="p-2 font-bold text-slate-300">{{ bond.TICKER }}</td>
-                            <td class="p-2 text-center">{{ bond.COUPON }}</td>
-                            <td class="p-2 text-right mono">{{ "{:,.0f}".format(bond.OUTSTANDING|float) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endfor %}
+    <div class="card overflow-hidden">
+        <table class="w-full text-left text-sm border-collapse">
+            <thead class="bg-slate-800/50 text-slate-500 uppercase text-[9px] tracking-widest font-black border-b border-slate-700">
+                <tr>
+                    <th class="p-4">Portfolio Strategy</th>
+                    <th class="p-4">Limit Utilization (OS & PV01)</th>
+                    <th class="p-4 text-right">Outstanding</th>
+                    <th class="p-4 text-center text-indigo-400">Wtd. Dur</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for port in summary %}
+                <tr class="portfolio-row" onclick="toggle('{{ port.id }}')">
+                    <td class="p-4">
+                        <div class="font-black text-indigo-400 uppercase text-sm tracking-tighter">{{ port.id }}</div>
+                        <div class="text-[8px] text-slate-600 font-bold tracking-widest">ACTIVE STRATEGY</div>
+                    </td>
+                    <td class="p-4 min-w-[250px] space-y-3">
+                        <div>
+                            <div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5">
+                                <span>OS Limit ({{ port.os_lim }})</span>
+                                <span class="{{ 'text-red-500' if port.os_util > 100 else '' }}">{{ port.os_util }}%</span>
+                            </div>
+                            <div class="progress-bg">
+                                <div class="progress-fill {{ 'bg-red-500' if port.os_util > 100 else 'bg-emerald-500' }}" style="width: {{ [port.os_util, 100]|min }}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-4 text-right mono font-bold text-slate-200">
+                        {{ "{:,.0f}".format(port.os_act) }}
+                    </td>
+                    <td class="p-4 text-center font-black text-indigo-300 bg-indigo-900/10">
+                        {{ port.dur }}
+                    </td>
+                </tr>
+                <tr id="detail-{{ port.id }}" class="bond-detail-row">
+                    <td colspan="4" class="p-0 bg-black">
+                        <table class="w-full text-[10px]">
+                            <thead class="bg-slate-900 text-slate-600 uppercase font-black">
+                                <tr>
+                                    <th class="p-3 pl-8 text-left italic">Ticker</th>
+                                    <th class="p-3 text-center">Coupon</th>
+                                    <th class="p-3 text-right">Outstanding</th>
+                                    <th class="p-3 text-center text-indigo-500">Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bond in details[port.id] %}
+                                <tr class="border-b border-slate-900/50 hover:bg-slate-900/50">
+                                    <td class="p-2 pl-8 font-mono text-white text-xs italic">{{ bond.TICKER }}</td>
+                                    <td class="p-2 text-center text-slate-400">{{ bond.COUPON }}</td>
+                                    <td class="p-2 text-right mono text-slate-400">{{ "{:,.0f}".format(bond.OUTSTANDING|float) }}</td>
+                                    <td class="p-2 text-center font-bold text-indigo-400">{{ bond.DUR }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     <script>
         function toggle(id) {
             const el = document.getElementById('detail-' + id);
-            el.classList.toggle('hidden');
+            el.style.display = (el.style.display === 'table-row') ? 'none' : 'table-row';
         }
     </script>
 </body>
