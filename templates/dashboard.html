@@ -5,12 +5,13 @@
     <title>Risk Terminal | v7.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <style>
         body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
         .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 1rem; }
         .progress-bg { background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden; }
         .progress-fill { height: 100%; transition: width 0.4s; }
-        .portfolio-row { cursor: pointer; border-bottom: 1px solid #1e293b; }
+        .portfolio-row { cursor: pointer; border-bottom: 1px solid #1e293b; transition: background 0.1s; }
         .portfolio-row:hover { background-color: #1e293b; }
         .bond-detail-row { background-color: #020617; display: none; }
     </style>
@@ -21,116 +22,54 @@
         <div class="flex gap-4">
             <div class="card px-4 py-2 border-l-4 border-indigo-500">
                 <p class="text-[9px] text-slate-500 font-bold uppercase text-right">FX RATE</p>
-                <p class="text-xl font-bold mono">{{ settings.fx_rate }}</p>
+                <p class="text-xl font-bold mono text-white">{{ settings.fx_rate }}</p>
             </div>
-            <a href="/admin" class="bg-indigo-600 px-6 py-3 rounded-xl text-xs font-black uppercase flex items-center">⚙️ ADMIN</a>
+            <a href="/admin" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl text-xs font-black uppercase flex items-center transition">⚙️ ADMIN</a>
         </div>
     </header>
 
     <div class="grid grid-cols-3 gap-6 mb-8">
-        <div class="card p-4">
-            <h3 class="text-[10px] font-bold text-slate-500 uppercase mb-4 text-center">Govt vs Corp Exposure</h3>
-            <canvas id="pieGov" class="max-h-[150px]"></canvas>
-        </div>
-        <div class="card p-4 flex items-center justify-center text-slate-700 text-[10px] font-bold">IDR BOOKS (TR vs AFS vs HTM)</div>
-        <div class="card p-4 flex items-center justify-center text-slate-700 text-[10px] font-bold">VLS BOOKS (TR vs AFS vs HTM)</div>
+        <div class="card p-4"><h3 class="text-[9px] font-bold text-slate-500 uppercase mb-4 text-center">Govt vs Corp</h3><canvas id="c1" class="max-h-[140px]"></canvas></div>
+        <div class="card p-4"><h3 class="text-[9px] font-bold text-slate-500 uppercase mb-4 text-center">IDR Books</h3><canvas id="c2" class="max-h-[140px]"></canvas></div>
+        <div class="card p-4"><h3 class="text-[9px] font-bold text-slate-500 uppercase mb-4 text-center">VLS Books</h3><canvas id="c3" class="max-h-[140px]"></canvas></div>
     </div>
 
     <div class="card overflow-hidden">
         <table class="w-full text-left text-sm border-collapse">
             <thead class="bg-slate-800/50 text-slate-500 uppercase text-[9px] font-black border-b border-slate-700">
-                <tr>
-                    <th class="p-4">Portfolio Strategy</th>
-                    <th class="p-4">Limit Gauges (OS & PV01)</th>
-                    <th class="p-4 text-right">Outstanding</th>
-                    <th class="p-4 text-right">Unrealized G/L</th>
-                    <th class="p-4 text-center text-indigo-400">Dur</th>
-                </tr>
+                <tr><th class="p-4">Portfolio Strategy</th><th class="p-4">Risk Gauges (OS & PV01)</th><th class="p-4 text-right">Outstanding</th><th class="p-4 text-right">Unrealized G/L</th><th class="p-4 text-center text-indigo-400">Dur</th></tr>
             </thead>
             <tbody>
-                {% for port in summary %}
-                <tr class="portfolio-row" onclick="toggle('{{ port.id }}')">
-                    <td class="p-4">
-                        <div class="font-black text-indigo-400 uppercase text-sm tracking-tighter italic">{{ port.id }}</div>
-                        <div class="text-[8px] text-slate-600 font-bold uppercase">{{ port.type }}</div>
-                    </td>
+                {% for p in summary %}
+                <tr class="portfolio-row" onclick="toggle('{{ p.id }}')">
+                    <td class="p-4"><div class="font-black text-indigo-400 uppercase text-sm italic tracking-tighter">{{ p.id }}</div><div class="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{{ p.type }}</div></td>
                     <td class="p-4 min-w-[250px] space-y-3">
-                        <div>
-                            <div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5">
-                                <span>OS Usage</span><span class="{{ 'text-red-500 font-black' if port.os_util > 100 else '' }}">{{ port.os_util }}%</span>
-                            </div>
-                            <div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if port.os_util > 100 else 'bg-emerald-500' }}" style="width: {{ [port.os_util, 100]|min }}%"></div></div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5">
-                                <span>PV01 Usage ({{ port.pv_act_fmt }})</span><span class="{{ 'text-red-500 font-black' if port.pv_util > 100 else '' }}">{{ port.pv_util }}%</span>
-                            </div>
-                            <div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if port.pv_util > 100 else 'bg-indigo-500' }}" style="width: {{ [port.pv_util, 100]|min }}%"></div></div>
-                        </div>
+                        <div><div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5"><span>OS Usage</span><span class="{{ 'text-red-500 font-black' if p.os_util > 100 else '' }}">{{ p.os_util }}%</span></div><div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if p.os_util > 100 else 'bg-emerald-500' }}" style="width: {{ [p.os_util, 100]|min }}%"></div></div></div>
+                        {% if p.pv_util > 0 or p.id.startswith('FITR') %}
+                        <div><div class="flex justify-between text-[8px] font-bold text-slate-500 uppercase mb-0.5"><span>PV01 Usage ({{ p.pv_act_fmt }})</span><span class="{{ 'text-red-500 font-black' if p.pv_util > 100 else '' }}">{{ p.pv_util }}%</span></div><div class="progress-bg"><div class="progress-fill {{ 'bg-red-500' if p.pv_util > 100 else 'bg-indigo-500' }}" style="width: {{ [p.pv_util, 100]|min }}%"></div></div></div>
+                        {% endif %}
                     </td>
-                    <td class="p-4 text-right mono font-bold text-slate-200">{{ port.os_fmt }}</td>
-                    <td class="p-4 text-right mono {{ 'text-red-400' if '-' in port.gl_fmt else 'text-emerald-400' }}">{{ port.gl_fmt }}</td>
-                    <td class="p-4 text-center font-bold text-indigo-300">{{ port.dur }}</td>
+                    <td class="p-4 text-right mono font-bold text-slate-200 uppercase">{{ p.os_fmt }}</td>
+                    <td class="p-4 text-right mono {{ 'text-red-400' if '-' in p.gl_fmt else 'text-emerald-400' }}">{{ p.gl_fmt }}</td>
+                    <td class="p-4 text-center font-bold text-indigo-300">{{ p.dur }}</td>
                 </tr>
-                <tr id="detail-{{ port.id }}" class="bond-detail-row">
-                    <td colspan="5" class="p-0 bg-[#020617]">
-                        <table class="w-full text-[10px] border-collapse">
-                            <thead class="bg-slate-900/80 text-slate-500 uppercase font-black">
-                                <tr>
-                                    <th class="p-3 pl-8 text-left">Ticker</th>
-                                    <th class="p-3 text-center">Coupon</th>
-                                    <th class="p-3 text-center">Maturity</th>
-                                    <th class="p-3 text-right">Outstanding</th>
-                                    <th class="p-3 text-center">Acq Date</th>
-                                    <th class="p-3 text-center">Cost</th>
-                                    <th class="p-3 text-center">MTM</th>
-                                    <th class="p-3 text-right">G/L</th>
-                                    <th class="p-3 text-center">Dur</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-900">
-                                {% for bond in details[port.id] %}
-                                <tr class="hover:bg-slate-900/40">
-                                    <td class="p-2 pl-8 font-mono text-white italic">{{ bond.t }}</td>
-                                    <td class="p-2 text-center">{{ bond.c }}</td>
-                                    <td class="p-2 text-center text-slate-500">{{ bond.m }}</td>
-                                    <td class="p-2 text-right mono text-slate-400 font-bold uppercase">{{ bond.os }}</td>
-                                    <td class="p-2 text-center text-slate-500">{{ bond.ad }}</td>
-                                    <td class="p-2 text-center mono">{{ bond.cp }}</td>
-                                    <td class="p-2 text-center mono">{{ bond.mtm }}</td>
-                                    <td class="p-2 text-right mono {{ 'text-red-500' if '-' in bond.gl else 'text-emerald-500' }}">{{ bond.gl }}</td>
-                                    <td class="p-2 text-center font-bold text-indigo-400">{{ bond.d }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
+                <tr id="detail-{{ p.id }}" class="bond-detail-row"><td colspan="5" class="p-0 bg-[#020617]"><table class="w-full text-[10px] border-collapse"><thead class="bg-slate-900/80 text-slate-500 uppercase font-black"><tr><th class="p-3 pl-8 text-left">Ticker</th><th class="p-3 text-center">Coupon</th><th class="p-3 text-center">Maturity</th><th class="p-3 text-right">Outstanding</th><th class="p-3 text-center">Acq Date</th><th class="p-3 text-center">Cost</th><th class="p-3 text-center">MTM</th><th class="p-3 text-right">G/L</th><th class="p-3 text-center">Dur</th></tr></thead><tbody class="divide-y divide-slate-900">{% for b in details[p.id] %}<tr class="hover:bg-slate-900/40"><td class="p-2 pl-8 font-mono text-white italic">{{ b.t }}</td><td class="p-2 text-center">{{ b.c }}</td><td class="p-2 text-center text-slate-500">{{ b.m }}</td><td class="p-2 text-right mono text-slate-400 font-bold uppercase">{{ b.os }}</td><td class="p-2 text-center text-slate-500">{{ b.ad }}</td><td class="p-2 text-center mono">{{ b.cp }}</td><td class="p-2 text-center mono">{{ b.mtm }}</td><td class="p-2 text-right mono {{ 'text-red-500' if '-' in b.gl else 'text-emerald-500' }}">{{ b.gl }}</td><td class="p-2 text-center font-bold text-indigo-400">{{ b.d }}</td></tr>{% endfor %}</tbody></table></td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
     <script>
-        function toggle(id) {
-            const el = document.getElementById('detail-' + id);
-            el.style.display = (el.style.display === 'table-row') ? 'none' : 'table-row';
-        }
-
-        // Pie Chart Initialization
-        const ctxGov = document.getElementById('pieGov').getContext('2d');
-        new Chart(ctxGov, {
+        function toggle(id) { const el = document.getElementById('detail-' + id); el.style.display = (el.style.display === 'table-row') ? 'none' : 'table-row'; }
+        Chart.register(ChartDataLabels);
+        const config = (ctx, labels, data, colors) => new Chart(ctx, {
             type: 'pie',
-            data: {
-                labels: ['Govt', 'Corp'],
-                datasets: [{
-                    data: {{ pie.govt_corp | tojson }},
-                    backgroundColor: ['#6366f1', '#1e293b'],
-                    borderWidth: 0
-                }]
-            },
-            options: { plugins: { legend: { display: false } } }
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
+            options: { plugins: { legend: { display: false }, datalabels: { color: '#fff', font: { size: 8, weight: 'bold' }, formatter: (v, c) => { let s = c.dataset.data.reduce((a,b)=>a+b,0); return s > 0 ? (v*100/s).toFixed(1) + '%' : ''; } } } }
         });
+        config(document.getElementById('c1'), ['Govt', 'Corp'], {{ pie.p1 | tojson }}, ['#6366f1', '#1e293b']);
+        config(document.getElementById('c2'), ['TR', 'AFS', 'HTM'], {{ pie.p2 | tojson }}, ['#f59e0b', '#10b981', '#6366f1']);
+        config(document.getElementById('c3'), ['TR', 'AFS', 'HTM'], {{ pie.p3 | tojson }}, ['#f59e0b', '#10b981', '#6366f1']);
     </script>
 </body>
 </html>
