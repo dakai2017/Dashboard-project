@@ -7,25 +7,21 @@ UPLOAD_FOLDER = 'data'
 SETTINGS_FILE = 'settings.json'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# PV01 Limits
+# PV01 Limits (IDR in Mn, USD in Th - Converted to base units)
 PV01_LIMITS_BASE = {
     "FITRGVID": 800.0 * 1e6, "FITRCPID": 700.0 * 1e6, "FITRGVVL": 15.0 * 1e3, "FITRCPVL": 15.0 * 1e3,
     "FIAFSGVID": 9000.0 * 1e6, "FIAFSCPID": 3300.0 * 1e6, "FIAFSGVVL": 37.0 * 1e3, "FIAFSCPVL": 27.0 * 1e3
 }
 
-DEFAULT_SETTINGS = {"fx_rate": 15400, "limits": {"FIAFSGVID": 10.3, "FIAFSCPID": 3.7, "FIAFSGVVL": 24.0, "FIAFSCPVL": 30.0, "FIHTMGVID": 1.8, "FIHTMCPID": 0.0, "FIHTMGVVL": 0.0, "FIHTMCPVL": 4.9}}
+DEFAULT_SETTINGS = {
+    "fx_rate": 15400, 
+    "limits": {
+        "FIAFSGVID": 10.3, "FIAFSCPID": 3.7, "FIAFSGVVL": 24.0, "FIAFSCPVL": 30.0, 
+        "FIHTMGVID": 1.8, "FIHTMCPID": 0.0, "FIHTMGVVL": 0.0, "FIHTMCPVL": 4.9
+    }
+}
 
-def format_currency(val, ccy):
-    if val == 0 or pd.isna(val): return "0"
-    abs_val, pre = abs(val), ("-" if val < 0 else "")
-    if ccy == 'IDR':
-        if abs_val >= 1e12: return f"{pre}{abs_val/1e12:.2f} Tn"
-        if abs_val >= 1e9: return f"{pre}{abs_val/1e9:.2f} Bn"
-        return f"{pre}{abs_val/1e6:.2f} Mn"
-    else:
-        if abs_val >= 1e6: return f"{pre}{abs_val/1e6:.2f} Mn"
-        return f"{pre}{abs_val/1e3:.2f} Th"
-
+# --- HELPERS ---
 def get_settings():
     if not os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, 'w') as f: json.dump(DEFAULT_SETTINGS, f)
@@ -33,12 +29,26 @@ def get_settings():
     with open(SETTINGS_FILE, 'r') as f: return json.load(f)
 
 def clean_num(val):
-    try:
-        if pd.isna(val) or val == '': return 0.0
-        s = str(val).strip().replace(',', '').replace('%', '')
-        if s.startswith('(') and s.endswith(')'): s = '-' + s[1:-1]
-        return float(s)
+    """Preserves negative signs and handles parentheses (loss)"""
+    if pd.isna(val) or val == '': return 0.0
+    s = str(val).strip().replace(',', '').replace('%', '')
+    if s.startswith('(') and s.endswith(')'): s = '-' + s[1:-1]
+    try: return float(s)
     except: return 0.0
+
+def format_currency(val, ccy):
+    """Explicitly handles negative signs for display"""
+    if val == 0 or pd.isna(val): return "0"
+    v = abs(val)
+    prefix = "-" if val < 0 else ""
+    if ccy == 'IDR':
+        if v >= 1e12: res = f"{v/1e12:.2f} Tn"
+        elif v >= 1e9: res = f"{v/1e9:.2f} Bn"
+        else: res = f"{v/1e6:.2f} Mn"
+    else:
+        if v >= 1e6: res = f"{v/1e6:.2f} Mn"
+        else: res = f"{v/1e3:.2f} Th"
+    return prefix + res
 
 def calc_mod_duration(row, eval_date):
     try:
@@ -50,14 +60,14 @@ def calc_mod_duration(row, eval_date):
         y_m = (y if y > 0 else 0.0001) / 2
         n = max(1, int(t * 2))
         k = np.arange(1, n + 1)
-        cf = np.full(len(k), c/2)
-        cf[-1] += 1.0
+        cf = np.full(len(k), c/2); cf[-1] += 1.0
         dfac = (1 + y_m)**-k
         p = np.sum(cf * dfac)
         mac = np.sum((k/2) * cf * dfac) / p
         return round(mac / (1 + y_m), 2)
     except: return 0.0
 
+# --- ROUTES ---
 @app.route('/')
 def index():
     try:
@@ -107,40 +117,35 @@ def index():
             details[pid] = [{"t":str(r.get('TICKER','-')),"c":f"{clean_num(r.get('COUPON',0)):.2f}%","m":pd.to_datetime(r.get('MATURITY_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('MATURITY_DATE')) else '-',"os":format_currency(clean_num(r.get('OUTSTANDING',0)),ccy),"ad":pd.to_datetime(r.get('ACQ_DATE')).strftime('%d-%m-%Y') if pd.notna(r.get('ACQ_DATE')) else '-',"cp":f"{clean_num(r.get('ACQ_PRICE',0)):.2f}","mtm":f"{clean_num(r.get('MTM',0)):.2f}","gl_val":clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB',0)),"gl":format_currency(clean_num(r.get('UNREALIZED_LOSS_GAIN_AFS_TB',0)),ccy) if "HTM" not in pid else "-","d":r.get('DUR',0)} for _,r in sub.iterrows()]
 
         return render_template('dashboard.html', summary=summary, details=details, settings=settings, pie={"p1":p1, "p2":get_book_sum('ID'), "p3":get_book_sum('VL')})
-    except Exception as e: return f"Error: {str(e)}"
+    except Exception as e: return f"<div style='color:white;background:red;padding:20px;'><h2>Critical Logic Error</h2><p>{str(e)}</p></div>"
 
 @app.route('/issuers')
 def issuers():
     try:
         settings = get_settings()
-        df = pd.read_csv(os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv"), skiprows=2)
+        file_path = os.path.join(UPLOAD_FOLDER, "FI-SISTEM.csv")
+        if not os.path.exists(file_path): return redirect(url_for('admin'))
+        df = pd.read_csv(file_path, skiprows=2)
         df.columns = [c.strip() for c in df.columns]
         df['OS_RAW'] = df['OUTSTANDING'].apply(clean_num)
-        
-        # Aggregate by ISSUER column
         issuer_grouped = df.groupby('ISSUER')['OS_RAW'].sum().reset_index()
         
-        # Load Issuer Limits file
         limits_path = os.path.join(UPLOAD_FOLDER, "ISSUER_LIMITS.csv")
         if os.path.exists(limits_path):
             lim_df = pd.read_csv(limits_path)
             lim_df.columns = [c.strip() for c in lim_df.columns]
+            lim_df['LIMIT_AMOUNT'] = lim_df['LIMIT_AMOUNT'].apply(clean_num)
             merged = pd.merge(issuer_grouped, lim_df, on='ISSUER', how='left').fillna(0)
         else:
-            merged = issuer_grouped
-            merged['LIMIT_AMOUNT'] = 0
+            merged = issuer_grouped; merged['LIMIT_AMOUNT'] = 0
             
         issuer_data = []
         for _, r in merged.iterrows():
-            util = (r['OS_RAW'] / r['LIMIT_AMOUNT'] * 100) if r['LIMIT_AMOUNT'] > 0 else 0
-            issuer_data.append({
-                "name": r['ISSUER'],
-                "act": format_currency(r['OS_RAW'], 'IDR'),
-                "lim": format_currency(r['LIMIT_AMOUNT'], 'IDR'),
-                "util": round(util, 2)
-            })
+            os_val, lim_val = float(r['OS_RAW']), float(r['LIMIT_AMOUNT'])
+            util = (os_val / lim_val * 100) if lim_val > 0 else 0
+            issuer_data.append({"name": r['ISSUER'], "act": format_currency(os_val, 'IDR'), "lim": format_currency(lim_val, 'IDR'), "util": round(util, 2)})
         return render_template('issuers.html', issuers=issuer_data)
-    except Exception as e: return f"Issuer Page Error: {str(e)}"
+    except Exception as e: return f"Issuer Error: {str(e)}"
 
 @app.route('/admin')
 def admin(): return render_template('admin.html', settings=get_settings())
@@ -159,4 +164,5 @@ def upload():
     if f and target: f.save(os.path.join(UPLOAD_FOLDER, target))
     return redirect(url_for('admin'))
 
-if __name__ == '__main__': app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
